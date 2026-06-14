@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Employee = require('../models/employee.model');
 
-// GET /api/employees — جيب كل الموظفين (مع search اختياري)
+// GET /api/employees 
 router.get('/', async (req, res) => {
   try {
     const { search } = req.query;
@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/employees/:id — جيب موظف واحد
+// GET /api/employees/:id    
 router.get('/:id', async (req, res) => {
   try {
     const employee = await Employee.findById(req.params.id);
@@ -28,7 +28,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/employees — أضف موظف جديد
+// POST /api/employees 
 router.post('/', async (req, res) => {
   try {
     const { name, department, salary } = req.body;
@@ -44,7 +44,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/employees/:id — عدّل موظف
+// PUT /api/employees/:id   
 router.put('/:id', async (req, res) => {
   try {
     const { name, department, salary } = req.body;
@@ -64,7 +64,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/employees/:id — احذف موظف
+// DELETE /api/employees/:id   
 router.delete('/:id', async (req, res) => {
   try {
     const deleted = await Employee.findByIdAndDelete(req.params.id);
