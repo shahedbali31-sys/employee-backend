@@ -1,78 +1,103 @@
 const express = require('express');
 const router = express.Router();
-const Employee = require('../models/employee.model');
+const { sql, poolPromise } = require('../db');
 
-// GET /api/employees 
+// GET /api/employees
 router.get('/', async (req, res) => {
-  try {
-    const { search } = req.query;
-    const filter = search
-      ? { name: { $regex: search, $options: 'i' } }
-      : {};
-
-    const employees = await Employee.find(filter).sort({ createdAt: -1 });
-    res.json(employees);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
+    try {
+        const pool = await poolPromise;
+        const search = req.query.search || '';
+        const result = await pool.request()
+            .input('search', sql.NVarChar, `%${search}%`)
+            .query(`
+                SELECT e.id, e.name, e.salary,
+                       d.id AS departmentId, d.name AS department
+                FROM Employee e
+                JOIN Department d ON e.departmentId = d.id
+                WHERE e.name LIKE @search
+            `);
+        res.json(result.recordset);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
 });
 
-// GET /api/employees/:id    
+// GET /api/employees/:id
 router.get('/:id', async (req, res) => {
-  try {
-    const employee = await Employee.findById(req.params.id);
-    if (!employee) return res.status(404).json({ message: 'Employee not found' });
-    res.json(employee);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, req.params.id)
+            .query(`
+                SELECT e.id, e.name, e.salary,
+                       d.id AS departmentId, d.name AS department
+                FROM Employee e
+                JOIN Department d ON e.departmentId = d.id
+                WHERE e.id = @id
+            `);
+        if (result.recordset.length === 0)
+            return res.status(404).json({ message: 'Employee not found' });
+        res.json(result.recordset[0]);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
 });
 
-// POST /api/employees 
+// POST /api/employees
 router.post('/', async (req, res) => {
-  try {
-    const { name, department, salary } = req.body;
-    const employee = new Employee({ name, department, salary });
-    const saved = await employee.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({ message: messages.join(', ') });
+    try {
+        const { name, salary, departmentId } = req.body;
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('name', sql.NVarChar, name)
+            .input('salary', sql.Decimal, salary)
+            .input('departmentId', sql.Int, departmentId)
+            .query(`
+                INSERT INTO Employee (name, salary, departmentId)
+                OUTPUT INSERTED.*
+                VALUES (@name, @salary, @departmentId)
+            `);
+        res.status(201).json(result.recordset[0]);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
     }
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
 });
 
-// PUT /api/employees/:id   
+// PUT /api/employees/:id
 router.put('/:id', async (req, res) => {
-  try {
-    const { name, department, salary } = req.body;
-    const updated = await Employee.findByIdAndUpdate(
-      req.params.id,
-      { name, department, salary },
-      { new: true, runValidators: true }
-    );
-    if (!updated) return res.status(404).json({ message: 'Employee not found' });
-    res.json(updated);
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      const messages = Object.values(err.errors).map((e) => e.message);
-      return res.status(400).json({ message: messages.join(', ') });
+    try {
+        const { name, salary, departmentId } = req.body;
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, req.params.id)
+            .input('name', sql.NVarChar, name)
+            .input('salary', sql.Decimal, salary)
+            .input('departmentId', sql.Int, departmentId)
+            .query(`
+                UPDATE Employee
+                SET name = @name, salary = @salary, departmentId = @departmentId
+                OUTPUT INSERTED.*
+                WHERE id = @id
+            `);
+        if (result.recordset.length === 0)
+            return res.status(404).json({ message: 'Employee not found' });
+        res.json(result.recordset[0]);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
     }
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
 });
 
-// DELETE /api/employees/:id   
+// DELETE /api/employees/:id
 router.delete('/:id', async (req, res) => {
-  try {
-    const deleted = await Employee.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: 'Employee not found' });
-    res.json({ message: 'Employee deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, req.params.id)
+            .query('DELETE FROM Employee WHERE id = @id');
+        res.json({ message: 'Employee deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
 });
 
 module.exports = router;
