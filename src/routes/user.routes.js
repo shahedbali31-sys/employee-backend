@@ -8,7 +8,6 @@ router.post('/register', async (req, res) => {
         const { username, password } = req.body;
         const pool = await poolPromise;
 
-        // تأكد إن اليوزر ما موجود
         const check = await pool.request()
             .input('username', sql.NVarChar, username)
             .query('SELECT * FROM Users WHERE username = @username');
@@ -42,6 +41,30 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid username or password' });
 
         res.json({ message: 'Login successful', user: result.recordset[0] });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PUT /api/users/reset-password — تغيير الباسورد
+router.put('/reset-password', async (req, res) => {
+    try {
+        const { username, newPassword } = req.body;
+        const pool = await poolPromise;
+
+        const check = await pool.request()
+            .input('username', sql.NVarChar, username)
+            .query('SELECT * FROM Users WHERE username = @username');
+
+        if (check.recordset.length === 0)
+            return res.status(404).json({ message: 'Username not found' });
+
+        await pool.request()
+            .input('username', sql.NVarChar, username)
+            .input('newPassword', sql.NVarChar, newPassword)
+            .query('UPDATE Users SET password = @newPassword WHERE username = @username');
+
+        res.json({ message: 'Password updated successfully' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
